@@ -132,6 +132,7 @@ class DQNAgent(AbstractAgent):
             Exploration rate.
         """
         # TODO: implement exponential‐decayin
+        # test
         # ε = ε_final + (ε_start - ε_final) * exp(-total_steps / ε_decay)
         # Currently, it is constant and returns the starting value ε
 
