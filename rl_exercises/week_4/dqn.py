@@ -132,10 +132,16 @@ class DQNAgent(AbstractAgent):
             Exploration rate.
         """
         # TODO: implement exponential‐decayin
+        # test
         # ε = ε_final + (ε_start - ε_final) * exp(-total_steps / ε_decay)
         # Currently, it is constant and returns the starting value ε
 
-        return self.epsilon_start
+        decay_factor = np.exp(-self.total_steps / self.epsilon_decay)
+        exploration_rate = (
+            self.epsilon_final
+            + (self.epsilon_start - self.epsilon_final) * decay_factor
+        )
+        return exploration_rate
 
     def predict_action(
         self, state: np.ndarray, evaluate: bool = False
@@ -158,19 +164,21 @@ class DQNAgent(AbstractAgent):
         info_out : dict
             Empty dict (compatible with interface).
         """
+        st = torch.tensor(state)
         if evaluate:
             # TODO: select purely greedy action from Q(s)
             with torch.no_grad():
-                qvals = ...  # noqa: F841
+                qvals = self.q(st)  # noqa: F841
 
-            action = None
+            action = int(qvals.argmax())
         else:
             if np.random.rand() < self.epsilon():
                 # TODO: sample random action
-                action = None
+                action = self.env.action_space.sample()
             else:
                 # TODO: select purely greedy action from Q(s)
-                action = None
+                actions = self.q(st)
+                action = int(actions.argmax())
 
         return action
 
@@ -229,11 +237,14 @@ class DQNAgent(AbstractAgent):
         mask = torch.tensor(np.array(dones), dtype=torch.float32)  # noqa: F841
 
         # # TODO: pass batched states through self.q and gather Q(s,a)
-        pred = ...
+        qv = self.q(s)
+        pred = qv.gather(1, a).squeeze()
 
         # TODO: compute TD target with frozen network
         with torch.no_grad():
-            target = ...
+            target_q = self.target_q(s_next)
+            arg_max = target_q.max(dim=1).values
+            target = r + self.gamma * arg_max
 
         loss = nn.MSELoss()(pred, target)
 
@@ -275,8 +286,8 @@ class DQNAgent(AbstractAgent):
 
             # update if ready
             if len(self.buffer) >= self.batch_size:
-                # TODO: sample a batch from replay buffer
-                batch = ...
+                # TODO: DONE sample a batch from replay buffer
+                batch = self.buffer.sample(self.batch_size)
                 _ = self.update_agent(batch)
 
             if done or truncated:
@@ -285,8 +296,8 @@ class DQNAgent(AbstractAgent):
                 ep_reward = 0.0
                 # logging
                 if len(recent_rewards) % 10 == 0:
-                    # TODO: compute avg over last eval_interval episodes and print
-                    avg = ...
+                    # TODO: DONE compute avg over last eval_interval episodes and print
+                    avg = sum(recent_rewards[-eval_interval:]) / eval_interval
                     print(
                         f"Frame {frame}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
                     )
@@ -301,8 +312,8 @@ def main(cfg: DictConfig):
     set_seed(env, cfg.seed)
 
     # 3) TODO: instantiate & train the agent
-    agent = ...
-    agent.train(...)
+    agent = DQNAgent(env, **cfg.agent)
+    agent.train(cfg.train.num_frames, cfg.train.eval_interval)
 
 
 if __name__ == "__main__":
